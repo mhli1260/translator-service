@@ -1,3 +1,14 @@
+from dotenv import load_dotenv
+import os
+from openai import AzureOpenAI
+load_dotenv()
+# Initialize the Azure OpenAI client
+client = AzureOpenAI(
+    api_key=os.getenv("api_key"),
+    api_version="2024-02-15-preview",
+    azure_endpoint=os.getenv("azure_endpoint")  # Replace with your Azure endpoint
+)
+
 def translate_content(content: str) -> tuple[bool, str]:
     if content == "这是一条中文消息":
         return False, "This is a Chinese message"
