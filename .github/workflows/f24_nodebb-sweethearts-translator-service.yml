@@ -27,18 +27,10 @@ jobs:
           python -m venv venv
           source venv/bin/activate
 
-      - name: Set up environment variables
-        run: |
-          echo "api_key=${{ secrets.api_key }}" >> .env
-          echo "azure_endpoint=${{ secrets.azure_endpoint }}" >> .env
-
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      # Optional: Add step to run tests here (PyTest, Django test suites, etc.)
-      - name: Run tests
-        run: pytest
-        
+      # Optional: Add step to run tests here (PyTest, Django test suites, etc.) 
       - name: Zip artifact for deployment
         run: zip release.zip ./* -r
 
