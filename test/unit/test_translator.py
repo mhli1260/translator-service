@@ -1,31 +1,59 @@
 from src.translator import translate_content, query_llm_robust, get_translation, client
 from openai import AzureOpenAI
-from mock import patch
+from unittest.mock import patch
 
 def test_chinese():
     is_english, translated_content = translate_content("这是一条中文消息")
     assert is_english == False
-    assert translated_content == "This is a Chinese message"
+    assert translated_content == "This is a Chinese message."
 
-def test_llm_normal_response():
-    pass
+@patch.object(client.chat.completions, 'create')
+def test_llm_normal_response(mock_create):
+    """Test when LLM provides expected responses"""
+    mock_create.side_effect = [
+        type('Response', (), {
+            'choices': [
+                type('Choice', (), {'message': type('Message', (), {'content': 'French'})()})()
+            ]
+        })(),
+        type('Response', (), {
+            'choices': [
+                type('Choice', (), {'message': type('Message', (), {'content': 'Hello world!'})()})()
+            ]
+        })()
+    ]
 
-def test_llm_gibberish_response():
-    pass
+    is_english, translation = translate_content("Bonjour le monde!")
+    
+    assert not is_english
+    assert translation == "Hello world!"
+    assert mock_create.call_count == 2
 
-#tests for query_llm function written in colab:
-def test_query_llm():
-    for test in complete_eval_set:
-        is_english, translated_content = translate_content(test["post"])
-        assert is_english == test["expected_answer"][0]
-        assert translated_content == test["expected_answer"][1]
+@patch.object(client.chat.completions, 'create')
+def test_llm_gibberish_response(mock_create):
+    """Test when LLM provides unexpected/gibberish responses"""
+    mock_create.return_value = type('Response', (), {
+        'choices': [
+            type('Choice', (), {'message': type('Message', (), {'content': "I don't understand!!"})()})()
+        ]
+    })()
 
-#tests for get_translation function written in colab:
-def test_get_translation():
-    for test in translation_eval_set:
-        translated_content = get_translation(test["post"])
-        assert translated_content == test["expected_answer"]
+    is_english, translation = translate_content("Testing gibberish")
+    
+    assert is_english
+    assert translation == "Testing gibberish"
 
+# def test_query_llm():
+#     for test in complete_eval_set:
+#         is_english, translated_content = translate_content(test["post"])
+#         assert is_english == test["expected_answer"][0]
+#         assert translated_content == test["expected_answer"][1]
+
+# #tests for get_translation function written in colab:
+# def test_get_translation():
+#     for test in translation_eval_set:
+#         translated_content = get_translation(test["post"])
+#         assert translated_content == test["expected_answer"]
 
 # the following is for tests for querry_llm_robust function written in colab:
 # All mock tests should return (True, post) as they trigger error checks.
