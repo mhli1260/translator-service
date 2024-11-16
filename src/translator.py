@@ -51,7 +51,7 @@ def get_language(post: str) -> str:
         return response.choices[0].message.content
     except Exception as e:
         print(f"Language detection error: {e}")
-        return ""
+        return "English"
 
 def translate_content(content: str) -> tuple[bool, str]:
     is_english, result = query_llm_robust(content)
