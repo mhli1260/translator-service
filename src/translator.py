@@ -17,7 +17,8 @@ def get_translation(post: str) -> str:
             messages=[
                 {
                     "role": "system",
-                    "content": "You are a helpful translator that accurately translates text from other languages to English. Your answer must only be the final translated output."
+                    "content": """You are a helpful translator that accurately translates text from other languages to English. 
+                    Your answer must only be the final translated output."""
                 },
                 {
                     "role": "user",
@@ -37,7 +38,9 @@ def get_language(post: str) -> str:
             messages=[
                 {
                     "role": "system",
-                    "content": "You are a helpful assistant that accurately detects the language of the text provided. Your answer must only be the name of the language detected in English. If you can't detect the language or if there are multiple languages, return English as the answer."
+                    "content": """You are a helpful assistant that accurately detects the language of the text provided. 
+                    Your answer must only be the name of the language detected in English. 
+                    If you can't detect the language or if there are multiple languages, return English as the answer."""
                 },
                 {
                     "role": "user",

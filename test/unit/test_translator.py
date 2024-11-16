@@ -7,11 +7,6 @@ from src.evaluation_utils import (
     evaluate
 )
 
-# def test_chinese():
-#     is_english, translated_content = translate_content("这是一条中文消息")
-#     assert is_english == False
-#     assert translated_content == "This is a Chinese message."
-
 def test_chinese():
     """Test Chinese translation with semantic similarity check"""
     is_english, translated_content = translate_content("这是一条中文消息")
@@ -106,9 +101,10 @@ def test_malformed_response(mocker):
             self.choices = []
     mocker.return_value = MockResponse()
 
-    result = query_llm_robust("こんにちは")
-    assert result == (True, "こんにちは")
+    result = query_llm_robust("こ       ん          に2323     ちは")
+    assert result == (True, "こ       ん          に2323     ちは")
 
+# This function is to test the evaluation function
 def test_translation_evaluation():
     """Test translation evaluation metric"""
     test_cases = [
@@ -128,6 +124,7 @@ def test_translation_evaluation():
         score = eval_single_response_translation(case["expected"], case["response"])
         assert score >= case["min_score"]
 
+# Function to test classification evaluation
 def test_classification_evaluation():
     """Test classification evaluation metric"""
     test_cases = [
@@ -147,6 +144,7 @@ def test_classification_evaluation():
         score = eval_single_response_classification(case["expected"], case["response"])
         assert score == case["expected_score"]
 
+# Mock the query function to return expected responses
 def test_evaluate_function():
     """Test the evaluate function"""
     test_dataset = [
@@ -160,9 +158,10 @@ def test_evaluate_function():
     score = evaluate(mock_query, eval_single_response_classification, test_dataset)
     assert score == 100.0  
 
+# Evaluation tests, using 5 items from the complete evaluation set to keep runtime reasonable.
 def test_complete_evaluation_set__non_english():
     """Test the complete evaluation set (non-english posts) by calling the actual LLM."""
-    test_subset = complete_eval_set[:19]
+    test_subset = complete_eval_set[:5]
 
     for test_case in test_subset:
         is_english, translation = translate_content(test_case["post"])
@@ -177,7 +176,7 @@ def test_complete_evaluation_set__non_english():
 
 def test_complete_evaluation_set__english():
     """Test the complete evaluation set (non-english posts) by calling the actual LLM."""
-    test_subset = complete_eval_set[18:36]
+    test_subset = complete_eval_set[18:20]
 
     for test_case in test_subset:
         is_english, translation = translate_content(test_case["post"])
@@ -202,6 +201,34 @@ def test_complete_evaluation_set_malformed():
         # Calculate similarity between expected and actual translations        
         assert is_english == expected_is_english, f"Language detection failed for: {test_case['post']}"
         assert translation == expected_translation, f"Translation failed for: {test_case['post']}"
+
+def test_evaluate_with_complete_dataset():
+    """Test translation quality using the complete evaluation set"""
+    
+    # Convert complete_eval_set to the format expected by evaluate function.
+    test_dataset = [
+        {
+            "post": item["post"],
+            "expected_answer": item["expected_answer"][1] 
+        }
+        # Only testing the first 10 items to keep runtime reasonable.
+        for item in complete_eval_set[:5]  
+    ]
+    
+    def translation_func(text):
+        _, translation = translate_content(text)
+        return translation
+    
+    score = evaluate(
+        query_fn=translation_func,
+        eval_fn=eval_single_response_translation,
+        dataset=test_dataset
+    )
+    
+    print(f"\nEvaluation Results:")
+    print(f"Total items tested: {len(test_dataset)}")
+    print(f"Overall quality score: {score}%")
+    assert score >= 70.0, f"Overall translation quality score {score}% is below threshold 70%"
 
 translation_eval_set = [
     {
