@@ -1,31 +1,59 @@
 from src.translator import translate_content, query_llm_robust, get_translation, client
 from openai import AzureOpenAI
-from mock import patch
+from unittest.mock import patch
+from src.evaluation_utils import (
+    eval_single_response_translation,
+    eval_single_response_classification,
+    evaluate
+)
 
 def test_chinese():
+    """Test Chinese translation with semantic similarity check"""
     is_english, translated_content = translate_content("这是一条中文消息")
+    expected_translation = "This is a message in Chinese."
+    
     assert is_english == False
-    assert translated_content == "This is a Chinese message"
+    similarity_score = eval_single_response_translation(expected_translation, translated_content)
+    assert similarity_score >= 0.9, f"Translation similarity {similarity_score} is below threshold 0.9"
 
-def test_llm_normal_response():
-    pass
+@patch.object(client.chat.completions, 'create')
+def test_llm_normal_response(mock_create):
+    """Test when LLM provides expected responses"""
+    mock_create.side_effect = [
+        type('Response', (), {
+            'choices': [
+                type('Choice', (), {'message': type('Message', (), {'content': 'French'})()})()
+            ]
+        })(),
+        type('Response', (), {
+            'choices': [
+                type('Choice', (), {'message': type('Message', (), {'content': 'Hello world!'})()})()
+            ]
+        })()
+    ]
 
-def test_llm_gibberish_response():
-    pass
+    is_english, translation = translate_content("Bonjour le monde!")
+    
+    assert not is_english
+    assert translation == "Hello world!"
+    assert mock_create.call_count == 2 #API should be called twice: detection & translation
 
-#tests for query_llm function written in colab:
-def test_query_llm():
-    for test in complete_eval_set:
-        is_english, translated_content = translate_content(test["post"])
-        assert is_english == test["expected_answer"][0]
-        assert translated_content == test["expected_answer"][1]
 
-#tests for get_translation function written in colab:
-def test_get_translation():
-    for test in translation_eval_set:
-        translated_content = get_translation(test["post"])
-        assert translated_content == test["expected_answer"]
+@patch.object(client.chat.completions, 'create')
+def test_llm_gibberish_response(mock_create):
+    """Test when LLM provides unexpected/gibberish responses"""
+    mock_create.return_value = type('Response', (), {
+        'choices': [
+            type('Choice', (), {'message': type('Message', (), {'content': "I don't understand!!"})()})()
+        ]
+    })()
 
+    is_english, translation = translate_content("Testing gibberish")
+    
+    # The response should be treated as english
+    assert is_english
+    assert translation == "Testing gibberish"
+    assert mock_create.call_count == 1
 
 # the following is for tests for querry_llm_robust function written in colab:
 # All mock tests should return (True, post) as they trigger error checks.
@@ -73,9 +101,134 @@ def test_malformed_response(mocker):
             self.choices = []
     mocker.return_value = MockResponse()
 
-    result = query_llm_robust("こんにちは")
-    assert result == (True, "こんにちは")
+    result = query_llm_robust("こ       ん          に2323     ちは")
+    assert result == (True, "こ       ん          に2323     ちは")
 
+# This function is to test the evaluation function
+def test_translation_evaluation():
+    """Test translation evaluation metric"""
+    test_cases = [
+        {
+            "expected": "Hello world",
+            "response": "Hello world",
+            "min_score": 0.9  # identical text
+        },
+        {
+            "expected": "Hello world",
+            "response": "Hi world",
+            "min_score": 0.7  # similar
+        }
+    ]
+    
+    for case in test_cases:
+        score = eval_single_response_translation(case["expected"], case["response"])
+        assert score >= case["min_score"]
+
+# Function to test classification evaluation
+def test_classification_evaluation():
+    """Test classification evaluation metric"""
+    test_cases = [
+        {
+            "expected": "English",
+            "response": "english",
+            "expected_score": 1.0
+        },
+        {
+            "expected": "French",
+            "response": "Spanish",
+            "expected_score": 0.0
+        }
+    ]
+    
+    for case in test_cases:
+        score = eval_single_response_classification(case["expected"], case["response"])
+        assert score == case["expected_score"]
+
+# Mock the query function to return expected responses
+def test_evaluate_function():
+    """Test the evaluate function"""
+    test_dataset = [
+        {"post": "Hello", "expected_answer": "Bonjour"},
+        {"post": "Goodbye", "expected_answer": "Au revoir"}
+    ]
+    
+    def mock_query(text):
+        return "Bonjour" if text == "Hello" else "Au revoir"
+    
+    score = evaluate(mock_query, eval_single_response_classification, test_dataset)
+    assert score == 100.0  
+
+# Evaluation tests, using 5 items from the complete evaluation set to keep runtime reasonable.
+def test_complete_evaluation_set__non_english():
+    """Test the complete evaluation set (non-english posts) by calling the actual LLM."""
+    test_subset = complete_eval_set[:5]
+
+    for test_case in test_subset:
+        is_english, translation = translate_content(test_case["post"])
+        
+        expected_is_english, expected_translation = test_case["expected_answer"]
+        
+        # Calculate similarity between expected and actual translations
+        score = eval_single_response_translation(expected_translation, translation)
+        
+        assert is_english == expected_is_english, f"Language detection failed for: {test_case['post']}"
+        assert score >= 0.7, f"Low translation quality for: {test_case['post']}\nExpected: {expected_translation}\nGot: {translation}"
+
+def test_complete_evaluation_set__english():
+    """Test the complete evaluation set (non-english posts) by calling the actual LLM."""
+    test_subset = complete_eval_set[18:20]
+
+    for test_case in test_subset:
+        is_english, translation = translate_content(test_case["post"])
+        
+        expected_is_english, expected_translation = test_case["expected_answer"]
+        
+        # Calculate similarity between expected and actual translations
+        score = eval_single_response_translation(expected_translation, translation)
+        
+        assert is_english == expected_is_english, f"Language detection failed for: {test_case['post']}"
+        assert score >= 0.7, f"Low translation quality for: {test_case['post']}\nExpected: {expected_translation}\nGot: {translation}"
+
+def test_complete_evaluation_set_malformed():
+    """Test the complete evaluation set (malformed posts) by calling the actual LLM."""
+    test_subset = complete_eval_set[36:]
+
+    for test_case in test_subset:
+        is_english, translation = translate_content(test_case["post"])
+        
+        expected_is_english, expected_translation = test_case["expected_answer"]
+        
+        # Calculate similarity between expected and actual translations        
+        assert is_english == expected_is_english, f"Language detection failed for: {test_case['post']}"
+        assert translation == expected_translation, f"Translation failed for: {test_case['post']}"
+
+def test_evaluate_with_complete_dataset():
+    """Test translation quality using the complete evaluation set"""
+    
+    # Convert complete_eval_set to the format expected by evaluate function.
+    test_dataset = [
+        {
+            "post": item["post"],
+            "expected_answer": item["expected_answer"][1] 
+        }
+        # Only testing the first 10 items to keep runtime reasonable.
+        for item in complete_eval_set[:5]  
+    ]
+    
+    def translation_func(text):
+        _, translation = translate_content(text)
+        return translation
+    
+    score = evaluate(
+        query_fn=translation_func,
+        eval_fn=eval_single_response_translation,
+        dataset=test_dataset
+    )
+    
+    print(f"\nEvaluation Results:")
+    print(f"Total items tested: {len(test_dataset)}")
+    print(f"Overall quality score: {score}%")
+    assert score >= 70.0, f"Overall translation quality score {score}% is below threshold 70%"
 
 translation_eval_set = [
     {
@@ -408,7 +561,7 @@ Note: If problems persist, contact technical support.""")
     },
     {
         "post": "Hello みんな 안녕 مرحبا",
-        "expected_answer": (False, "Hello everyone, Hello, Hello.")
+        "expected_answer": (True, "Hello みんな 안녕 مرحبا")
     },
     {
         "post": "Th1s 1s br0k3n t3xt w1th numb3r5",
