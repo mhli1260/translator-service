@@ -1,3 +1,6 @@
+# Team SWEethearts (A2)
+### Deployed application: https://nodebb-sweethearts.azurewebsites.net/
+### Team repository: https://github.com/CMU-313/nodebb-f24-sweethearts
 # Translator Service
 
 This repo contains a Python Flask web app that will perform live translations for input text. The repo contains starter code that provides hard-coded dummy translations, which you can modify to include calls to an LLM.
